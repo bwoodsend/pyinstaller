@@ -623,3 +623,24 @@ def test_pandas_extension(pyi_builder):
         assert is_float(1) == 0
         """)
 
+
+@importorskip('matplotlib')
+def test_matplotlib(pyi_builder):
+    pyi_builder.test_source(
+        '''
+        import matplotlib
+        import os
+        import sys
+
+        normpath = lambda x: os.path.abspath(os.path.normpath(x))
+
+        assert normpath(matplotlib.get_data_path()) == \\
+           normpath(os.path.join(sys._MEIPASS, 'matplotlib/mpl-data'))
+
+        assert normpath(matplotlib.get_cachedir()) == \\
+            normpath(os.path.join(sys._MEIPASS, 'matplotlib/mpl-cfg'))
+
+        assert normpath(matplotlib.get_configdir()) == \\
+            normpath(os.path.join(sys._MEIPASS, 'matplotlib/mpl-cfg'))
+        '''
+    )

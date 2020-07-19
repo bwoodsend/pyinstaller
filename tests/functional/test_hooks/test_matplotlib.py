@@ -91,13 +91,6 @@ def test_matplotlib(pyi_builder, monkeypatch,
     # Enable the desired backend *BEFORE* plotting with this backend.
     matplotlib.use(backend_name)
 
-    # A runtime hook should force Matplotlib to create its configuration
-    # directory in a temporary directory rather than in $HOME/.matplotlib.
-    configdir = os.environ['MPLCONFIGDIR']
-    print('MPLCONFIGDIR:', repr(configdir))
-    if not configdir.startswith(tempfile.gettempdir()):
-        raise SystemExit('MPLCONFIGDIR not pointing to temp directory.')
-
     # Test access to the standard 'mpl_toolkits' namespace package installed
     # with Matplotlib. Note that this import was reported to fail under
     # Matplotlib 1.3.0.

@@ -10,37 +10,15 @@
 #-----------------------------------------------------------------------------
 
 
-# matplotlib will create $HOME/.matplotlib folder in user's home directory.
-# In this directory there is fontList.cache file which lists paths
-# to matplotlib fonts.
-#
-# When you run your onefile exe for the first time it's extracted to for example
-# "_MEIxxxxx" temp directory and fontList.cache file is created with fonts paths
-# pointing to this directory.
-#
-# Second time you run your exe new directory is created "_MEIyyyyy" but
-# fontList.cache file still points to previous directory which was deleted.
-# And then you will get error like:
-#
-#     RuntimeError: Could not open facefile
-#
-# We need to force matplotlib to recreate config directory every time you run
-# your app.
-
-
-import atexit
 import os
-import shutil
-import tempfile
+import sys
 
-
-# Put matplot config dir to temp directory.
-configdir = tempfile.mkdtemp()
-os.environ['MPLCONFIGDIR'] = configdir
-
-
-try:
-    # Remove temp directory at application exit and ignore any errors.
-    atexit.register(shutil.rmtree, configdir, ignore_errors=True)
-except OSError:
-    pass
+path = os.path.join(sys._MEIPASS, 'matplotlib/mpl-cfg')
+if not os.path.exists(path):
+    # In earlier version of matplotlib (3.0.3) the config folder may be empty.
+    # PyInstaller doesn't copy empty folders so in this case
+    # ``matplotlib/mpl-cfg`` will not exist in the PyInstaller build causing
+    # matplotlib to rais a ``FileNotFoundError``.
+    # Ensure the config folder is made (even if it's empty).
+    os.mkdir(path)
+os.environ['MPLCONFIGDIR'] = path
