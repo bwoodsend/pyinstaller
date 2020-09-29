@@ -503,6 +503,17 @@ You are welcome to read the ``PyInstaller.utils.hooks`` module
    ``Django.settings.INSTALLED_APPS`` list and many others.
 
 
+Support for Conda
+.................
+
+.. automodule:: PyInstaller.utils.hooks.conda
+
+.. autofunction:: PyInstaller.utils.hooks.conda.collect_dynamic_libs()
+
+.. autofunction:: PyInstaller.utils.hooks.conda.search_distribution
+
+.. autofunction:: PyInstaller.utils.hooks.conda.walk_dependency_tree
+
 .. _the hook(hook_api) function:
 
 The ``hook(hook_api)`` Function
