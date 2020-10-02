@@ -64,7 +64,8 @@ del prog, outfile, fh, text
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = ['sphinx.ext.intersphinx',
-              'pyi_sphinx_roles']
+              'pyi_sphinx_roles',
+              'sphinx.ext.autodoc', ]
 
 intersphinx_mapping = {
     'website': ('http://www.pyinstaller.org//', None),
@@ -124,7 +125,7 @@ exclude_patterns = ['_build', 'tools', 'source']
 
 # If true, the current module name will be prepended to all description
 # unit titles (such as .. function::).
-#add_module_names = True
+add_module_names = False
 
 # If true, sectionauthor and moduleauthor directives will be shown in the
 # output. They are ignored by default.
