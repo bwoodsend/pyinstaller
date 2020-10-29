@@ -39,6 +39,7 @@ rather than the *package name* you import it with. i.e Use
 import sys
 from pathlib import Path
 import json
+import fnmatch
 
 from PyInstaller import compat
 from PyInstaller.log import logger
@@ -48,6 +49,17 @@ from PyInstaller.log import logger
 # from our `compat` module is intentional.
 CONDA_ROOT = Path(sys.prefix)
 CONDA_META_DIR = CONDA_ROOT / "conda-meta"
+
+# Find all paths in `sys.path` that are inside Conda root.
+PYTHONPATH_PREFIXES = []
+for _path in sys.path:
+    _path = Path(_path)
+    try:
+        PYTHONPATH_PREFIXES.append(_path.relative_to(sys.prefix))
+    except ValueError:
+        pass
+
+PYTHONPATH_PREFIXES.sort(key=lambda p: len(p.parts), reverse=True)
 
 
 def search_distribution(name):
@@ -190,3 +202,75 @@ def collect_dynamic_libs(name,
                 files.append((str(CONDA_ROOT / file), dest))
 
     return files
+
+
+def _get_package_name(file):
+    """Determine the package name of a Python file in ``sys.path``.
+
+    :param file: A Python filename relative to Conda root (sys.prefix).
+    :return: Package name or None.
+
+    This function only considers single file packages e.g. ``foo.py`` or
+    top level ``foo/__init__.py``\\ s. Anything else is ignored (returning
+    ``None``).
+    """
+    file = Path(file)
+    # TODO: Handle PEP 420 namespace packages (which are missing `__init__`
+    #       module). No such Conda PEP 420 namespace packages are known.
+
+    # Get top-level folders by finding parents of `__init__.xyz`s
+    if file.stem == "__init__" and file.suffix in compat.ALL_SUFFIXES:
+        file = file.parent
+
+    elif not (file.suffix in compat.ALL_SUFFIXES or file.is_dir()):
+        return
+
+    for prefix in PYTHONPATH_PREFIXES:
+        if len(file.parts) != len(prefix.parts) + 1:
+            continue
+        if fnmatch.fnmatch(str(file.parent), str(prefix)):
+            return file.stem
+
+
+# All the information we want is organised the wrong way.
+
+# We want to look up distribution based on package names but we can only search
+# for packages using distribution names. And we'd like to search for a
+# distribution's json file but, due to the noisy filenames of the jsons, we can
+# only find a json's distribution rather than a distribution's json.
+
+# So we have to read everything, then regroup distributions in the ways we want
+# them grouped. This will likely be a spectacular bottleneck on full blown
+# Conda (non miniconda) with 250+ packages by default at several GiBs. I
+# suppose we could cache this on a per-json basis if it gets too much.
+
+
+def _init_distributions():
+    distributions = {}
+
+    for path in CONDA_META_DIR.glob("*.json"):
+        # This will likely be quite a bottleneck on the full blown Conda (not
+        # miniconda) with 100s of packages at several GiBs. I suppose we could
+        # cache this on a per-json basis if people moan.
+        distribution = json.loads(path.read_text())
+        for file in distribution["files"]:
+            pkg = _get_package_name(file)
+            if pkg is not None:
+                distributions[pkg] = distribution
+
+    return distributions
+
+
+distributions = _init_distributions()
+
+
+def package_distribution(name):
+    """Get distribution information for a **package** (i.e. something you'd
+    import).
+
+    :rtype: dict
+    """
+    if name in distributions:
+        return distributions[name]
+    raise ModuleNotFoundError("Package {} is either not installed or was"
+                              " not installed using Conda.".format(name))
