@@ -12,7 +12,8 @@
 # language=rst
 """
 Additional helper methods for working specifically with Anaconda distributions
-are found at :attr:`PyInstaller.util.hooks.conda_support`. These functions find
+are found at :attr:`PyInstaller.util.hooks.conda_support` which is designed to
+mimic (albeit loosely) the `importlib.metadata`_ package. These functions find
 and parse the distribution metadata from json files located in the
 ``conda-meta`` directory.
 
@@ -32,7 +33,8 @@ module should therefore be wrapped in a conditional clause::
 
 Packages are all referenced by the *distribution name* you use to install it,
 rather than the *package name* you import it with. i.e Use
-``search_distribution("pillow")`` instead of ``search_distribution("PIL")``.
+``distribution("pillow")`` instead of ``distribution("PIL")`` or use
+``package_distribution("PIL")``.
 
 """
 
@@ -43,6 +45,11 @@ import fnmatch
 
 from PyInstaller import compat
 from PyInstaller.log import logger
+
+if compat.is_py38:
+    from importlib.metadata import PackagePath as _PackagePath
+else:
+    from importlib_metadata import PackagePath as _PackagePath
 
 # Conda virtual environments each get their own copy of `conda-meta` so the use
 # of `sys.prefix` instead of `sys.base_prefix`, `sys.real_prefix`  or anything
@@ -62,52 +69,153 @@ for _path in sys.path:
 PYTHONPATH_PREFIXES.sort(key=lambda p: len(p.parts), reverse=True)
 
 
-def search_distribution(name):
+class Distribution(object):
+    """A bucket class representation of a Conda distribution.
+
+    This bucket exports the following attributes:
+
+    :ivar name: The distribution's name.
+    :ivar version: Its version.
+    :ivar files: All filenames as :meth:`PackagePath`\\ s included with this
+                 distribution.
+    :ivar dependencies: Names of other distributions that this distribution
+                        depends on (with version constraints removed).
+    :ivar packages: Names of importable packages included in this distribution.
+
+    This class is not intended to be constructed directly by users. Rather use
+    :meth:`distribution` or :meth:`package_distribution` to provide one for
+    you.
+
     """
-     Finds and extracts the distribution metadata from the distribution json
-     files in the ``conda-meta`` directory.
+    def __init__(self, json_path):
+        try:
+            self._json_path = Path(json_path)
+            assert self._json_path.exists()
+        except (TypeError, AssertionError):
+            raise TypeError(
+                "Distribution requires a path to a conda-meta json. Perhaps "
+                "you want `distribution({})` instead?".format(repr(json_path)))
 
-    :param name: Distribution name.
-    :type name: str
-    :return: The json-parsed distribution information.
-    :rtype: dict
-    :raises: ModuleNotFoundError: If **distribution** was not installed with
-             conda.
+        # Everything we need (including this distribution's name) is kept in
+        # the metadata json.
+        self.raw = json.loads(self._json_path.read_text())
 
-    This function collects a single distribution. But this is generally
-    discouraged due to Conda's often moving distribution contents to
-    base-distributions. e.g. *numpy* itself is empty but depends on
-    *numpy-base*, which contains the python files and depends on *mkl* and
-    *blas* which contain the DLLs. Instead use :meth:`walk_dependency_tree`.
+        # Unpack the more useful contents of the json.
+        self.name = self.raw["name"]
+        self.version = self.raw["version"]
+        self.files = [PackagePath(i) for i in self.raw["files"]]
+        self.dependencies = self._init_dependencies()
+        self.packages = self._init_package_names()
+
+    def __repr__(self):
+        return "{}(name=\"{}\", packages={})".format(
+            type(self).__name__, self.name, self.packages)
+
+    def _init_dependencies(self):
+        """
+        Read dependencies from ``self.raw["depends"]``.
+
+        :return: Dependent distribution names.
+        :rtype: list
+
+        The names in ``self.raw["depends"]`` come with extra version
+        constraint information which must be stripped.
+        """
+        dependencies = []
+
+        # For each dependency:
+        for dependency in self.raw["depends"]:
+            # ``dependency`` is a string of the form:
+            # "[name] [version constraints]"
+            name, *version_constraints = dependency.split(maxsplit=1)
+            dependencies.append(name)
+
+        return dependencies
+
+    def _init_package_names(self):
+        """
+        Search ``self.files`` for package names shipped by this distribution.
+
+        :return: Package names.
+        :rtype: list
+
+        These are names you would ``import`` rather than names you would
+        install.
+        """
+        packages = []
+        for file in self.files:
+            package = _get_package_name(file)
+            if package is not None:
+                packages.append(package)
+        return packages
+
+    @classmethod
+    def from_name(cls, name):
+        """Get distribution information for a given distribution **name**
+        (i.e. something you would ``conda install``).
+
+        :rtype: :class:`Distribution`
+        """
+        if name in distributions:
+            return distributions[name]
+
+        raise ModuleNotFoundError(
+            "Distribution {} is either not installed or was not installed "
+            "using Conda.".format(name))
+
+    @classmethod
+    def from_package_name(cls, name):
+        """Get distribution information for a **package** (i.e. something you'd
+        import).
+
+        :rtype: :class:`Distribution`
+
+        For example, the package ``pkg_resources`` belongs to the distribution
+        ``setuptools``, which contains three packages.
+
+        >>> package_distribution("pkg_resources")
+        Distribution(name="setuptools",
+                     packages=['easy_install', 'pkg_resources', 'setuptools'])
+
+        """
+        if name in distributions_by_package:
+            return distributions_by_package[name]
+        raise ModuleNotFoundError(
+            "Package {} is either not installed or was not installed using "
+            "Conda.".format(name))
+
+
+distribution = Distribution.from_name
+package_distribution = Distribution.from_package_name
+
+
+class PackagePath(_PackagePath):
+    """
+    A filename relative to Conda's root (``sys.prefix``).
+
+    This class inherits from :class:`pathlib.PurePosixPath` even on non-Posix
+    OSs. To convert to a :class:`pathlib.Path` pointing to the real file use
+    the :meth:`locate` method.
 
     """
-    # Locate the right json. The name format is:
-    #   [distribution name]-[version][ugly build # hash].json
-
-    # The json name can't be determined exactly so they must be glob searched:
-    for path in CONDA_META_DIR.glob(name + "-*.json"):
-        # But this will include distributions with a prefix of 'name'.
-        # e.g. 'numpy' would also pick up 'numpy-base'.
-        dic = json.loads(path.read_text())
-        if name == dic["name"]:
-            # Read the json to check we've found the right one.
-            # XXX: Maybe we should make this case and '-'/'_' insensitive?
-            return dic
-    raise ModuleNotFoundError("Distribution {} is either not installed or was"
-                              " not installed using Conda.".format(name))
+    def locate(self):
+        """Return a path-like object for this path pointing to the file's
+        true location.
+        """
+        return Path(sys.prefix) / self
 
 
 def walk_dependency_tree(initial, excludes=None):
     """
-    Collect metadata for a distribution and all direct and indirect
+    Collect a :class:`Distribution` and all direct and indirect
     dependencies of that distribution.
 
     :param initial: Distribution name to collect from.
     :type initial: str
     :param excludes: Distributions to exclude, defaults to ``None``.
     :type excludes: iterable  of str, optional
-    :return: A **distribution_name** to **metadata** mapping where **metadata**
-             is the output of ``search_distribution(distribution_name)``.
+    :return: A ``{name: distribution}`` dictionary where ``distribution``
+             is the output of ``conda_support.distribution(name)``.
     :rtype: dict
 
     """
@@ -125,7 +233,7 @@ def walk_dependency_tree(initial, excludes=None):
 
         try:
             # Collect and save it's metadata.
-            done[name] = distribution = search_distribution(name)
+            done[name] = distribution = Distribution.from_name(name)
             logger.debug("Collected Conda distribution '%s', a dependency of "
                          "'%s'." % (name, initial))
         except ModuleNotFoundError:
@@ -136,7 +244,7 @@ def walk_dependency_tree(initial, excludes=None):
             continue
 
         # For each dependency:
-        for _name in distribution["depends"]:
+        for _name in distribution.dependencies:
 
             if _name in done:
                 # Skip anything already done.
@@ -156,16 +264,55 @@ def walk_dependency_tree(initial, excludes=None):
     return done
 
 
+def _iter_distributions(name, dependencies, excludes):
+    if dependencies:
+        return walk_dependency_tree(name, excludes).values()
+    else:
+        return [Distribution.from_name(name)]
+
+
+def requires(name, strip_versions=False):
+    """
+    List requirements of a distribution.
+
+    :param name: The name of the distribution.
+    :param strip_versions: List only their names, not their version
+                           constraints.
+    :return: List of distribution names.
+    """
+    if strip_versions:
+        return distribution(name).dependencies
+    return distribution(name).raw["depends"]
+
+
+def files(name, dependencies=False, excludes=None):
+    """
+    List all files belonging to a distribution.
+
+    :param name: The name of the distribution.
+    :param dependencies: Recursively collect files of dependencies too.
+    :type dependencies: bool
+    :param excludes: Distributions to ignore if **dependencies** is true.
+    :return: List of :class:`PackagePath`\\ s.
+
+    With ``dependencies=False``, this is just a shortcut for::
+
+        conda_support.distribution(name).files
+
+    """
+    return [
+        file for dist in _iter_distributions(name, dependencies, excludes)
+        for file in dist.files
+    ]
+
+
 if compat.is_win:
-    lib_dir = Path("Library", "bin")
+    lib_dir = PackagePath("Library", "bin")
 else:
-    lib_dir = Path("lib")
+    lib_dir = PackagePath("lib")
 
 
-def collect_dynamic_libs(name,
-                         dest=".",
-                         recurse_dependencies=True,
-                         excludes=None):
+def collect_dynamic_libs(name, dest=".", dependencies=True, excludes=None):
     """
     Collect DLLs for distribution **name**.
 
@@ -173,9 +320,9 @@ def collect_dynamic_libs(name,
     :type name: str
     :param dest: Target destination, defaults to ``'.'``.
     :type dest: str, optional
-    :param recurse_dependencies: Recursively collect libs for dependent
-                                 distributions (recommended).
-    :type recurse_dependencies: bool, optional
+    :param dependencies: Recursively collect libs for dependent distributions
+                         (recommended).
+    :type dependencies: bool, optional
     :param excludes: Dependent distributions to skip, defaults to ``None``.
     :type excludes: iterable, optional
     :return: List of DLLs in PyInstaller's ``(source, dest)`` format.
@@ -187,27 +334,25 @@ def collect_dynamic_libs(name,
     :meth:`PyInstaller.utils.hooks.collect_collect_dynamic_libs`.
 
     """
-    files = []
+    _files = []
 
-    if recurse_dependencies:
-        distributions = walk_dependency_tree(name, excludes).values()
-    else:
-        distributions = [search_distribution(name)]
+    for file in files(name, dependencies, excludes):
+        # A file is classified as a DLL if it lives inside the dedicated
+        # ``lib_dir`` DLL folder.
+        if file.parent == lib_dir:
+            _files.append((str(file.locate()), dest))
 
-    for distribution in distributions:
-        for file in distribution["files"]:
-            # A file is classified as a DLL if it lives inside the dedicated
-            # ``lib_dir`` DLL folder.
-            if Path(file).parent == lib_dir:
-                files.append((str(CONDA_ROOT / file), dest))
+    return _files
 
-    return files
+
+# --- Map packages to distributions and vice-versa ---
 
 
 def _get_package_name(file):
     """Determine the package name of a Python file in ``sys.path``.
 
     :param file: A Python filename relative to Conda root (sys.prefix).
+    :type file: PackagePath
     :return: Package name or None.
 
     This function only considers single file packages e.g. ``foo.py`` or
@@ -222,12 +367,21 @@ def _get_package_name(file):
     if file.stem == "__init__" and file.suffix in compat.ALL_SUFFIXES:
         file = file.parent
 
-    elif not (file.suffix in compat.ALL_SUFFIXES or file.is_dir()):
+    elif file.suffix not in compat.ALL_SUFFIXES:
+        # Keep single-file packages but skip DLLs, data and junk files.
         return
 
+    # Check if this file/folder's parent is in ``sys.path`` i.e. it's directly
+    # importable. This intentionally excludes submodules which would cause
+    # confusion because ``sys.prefix`` is in ``sys.path``, meaning that
+    # every file in an Conda installation is a submodule.
     for prefix in PYTHONPATH_PREFIXES:
         if len(file.parts) != len(prefix.parts) + 1:
+            # This check is redundant but speeds it up quite a bit.
             continue
+        # There are no wildcards involved here. The use of ``fnmatch`` is
+        # simply to handle the `if case-insensitive file system: use
+        # case-insensitive string matching.`
         if fnmatch.fnmatch(str(file.parent), str(prefix)):
             return file.stem
 
@@ -249,14 +403,8 @@ def _init_distributions():
     distributions = {}
 
     for path in CONDA_META_DIR.glob("*.json"):
-        # This will likely be quite a bottleneck on the full blown Conda (not
-        # miniconda) with 100s of packages at several GiBs. I suppose we could
-        # cache this on a per-json basis if people moan.
-        distribution = json.loads(path.read_text())
-        for file in distribution["files"]:
-            pkg = _get_package_name(file)
-            if pkg is not None:
-                distributions[pkg] = distribution
+        dist = Distribution(path)
+        distributions[dist.name] = dist
 
     return distributions
 
@@ -264,13 +412,14 @@ def _init_distributions():
 distributions = _init_distributions()
 
 
-def package_distribution(name):
-    """Get distribution information for a **package** (i.e. something you'd
-    import).
+def _init_packages():
+    distributions_by_package = {}
 
-    :rtype: dict
-    """
-    if name in distributions:
-        return distributions[name]
-    raise ModuleNotFoundError("Package {} is either not installed or was"
-                              " not installed using Conda.".format(name))
+    for distribution in distributions.values():
+        for package in distribution.packages:
+            distributions_by_package[package] = distribution
+
+    return distributions_by_package
+
+
+distributions_by_package = _init_packages()

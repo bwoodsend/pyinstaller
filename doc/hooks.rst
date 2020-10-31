@@ -508,11 +508,22 @@ Support for Conda
 
 .. automodule:: PyInstaller.utils.hooks.conda
 
-.. autofunction:: PyInstaller.utils.hooks.conda.collect_dynamic_libs()
+.. autofunction:: PyInstaller.utils.hooks.conda.distribution
 
-.. autofunction:: PyInstaller.utils.hooks.conda.search_distribution
+.. autofunction:: PyInstaller.utils.hooks.conda.package_distribution
+
+.. autofunction:: PyInstaller.utils.hooks.conda.files
+
+.. autofunction:: PyInstaller.utils.hooks.conda.requires
+
+.. autoclass:: PyInstaller.utils.hooks.conda.Distribution
+
+.. autoclass:: PyInstaller.utils.hooks.conda.PackagePath
+    :members:
 
 .. autofunction:: PyInstaller.utils.hooks.conda.walk_dependency_tree
+
+.. autofunction:: PyInstaller.utils.hooks.conda.collect_dynamic_libs
 
 .. _the hook(hook_api) function:
 
