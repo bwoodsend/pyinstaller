@@ -17,6 +17,7 @@ NOTE: All global variables, classes and imported modules create API
 """
 
 
+import collections
 import glob
 import os
 import pprint
@@ -465,6 +466,7 @@ class Analysis(Target):
         logger.info('Looking for dynamic libraries')
         self.binaries.extend(bindepend.Dependencies(self.binaries,
                                                     redirects=self.binding_redirects))
+        self.add_conda_dlls()
 
         ### Include zipped Python eggs.
         logger.info('Looking for eggs')
@@ -569,6 +571,46 @@ class Analysis(Target):
         logger.debug('Adding Python library to binary dependencies')
         binaries.append((os.path.basename(python_lib), python_lib, 'BINARY'))
         logger.info('Using Python library %s', python_lib)
+
+    def add_conda_dlls(self):
+        """
+        Collect Conda binary dependencies for all packages in ``self.pure``.
+
+        Returns immediately if not in a conda environment.
+        """
+        if not compat.is_pure_conda:
+            return
+        from PyInstaller.utils.hooks import conda
+
+        # Work out which distributions are needed. As distributions can contain
+        # multiple packages, group by distribution to avoid large amounts of
+        # duplicity in ``self.datas`` and in the logs.
+        distributions = collections.defaultdict(list)
+        for (name, *_) in self.pure:
+            distribution = conda.distributions_by_package.get(name)
+            if distribution is None:
+                continue
+            distributions[distribution].append(name)
+
+        # For every distribution being used:
+        for (distribution, imports) in distributions.items():
+            # Collect its DLLs.
+            logger.info("Collect Conda distribution '%s', required by %s.",
+                        distribution.name, imports)
+            dlls = conda.collect_dynamic_libs(distribution.name,
+                                              excludes=self.excludes)
+
+            # Add the DLLs converting from (source, dest_dir) format to
+            # (dest_name, source, 'DATA') format.
+            for (source, dest) in dlls:
+                # I'm intentionally skipping the DLL dependency scanner (by
+                # adding binary files as datas) for two reasons:
+                #   - Conda packages should have brought everything they use
+                #     with them so anything else detected would be system
+                #     libraries.
+                #   - There are litter files (.pdb, .def, ...) which, if
+                #     scanned, cause errors or uncatchable pop-up windows.
+                self.datas.append((os.path.basename(source), source, "DATA"))
 
 
 class ExecutableBuilder(object):
