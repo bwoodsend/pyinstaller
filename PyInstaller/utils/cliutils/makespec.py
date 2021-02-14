@@ -14,34 +14,38 @@
 Automatically build spec files containing a description of the project
 """
 
-import argparse
+import click
 import os
 
-import PyInstaller.building.makespec
+from PyInstaller.building import makespec
 import PyInstaller.log
 
 
-def run():
-    p = argparse.ArgumentParser()
-    PyInstaller.building.makespec.__add_options(p)
-    PyInstaller.log.__add_options(p)
-    p.add_argument('scriptname', nargs='+')
+def verbose_makespec(*args, **kwargs):
+    name = makespec.main(*args, **kwargs)
+    print('wrote %s' % name)
+    print('now run pyinstaller.py to build the executable')
 
-    args = p.parse_args()
-    PyInstaller.log.__process_options(p, args)
+
+def run():
+    main = makespec.__add_options(verbose_makespec)
+    # PyInstaller.log.__add_options(p)  worry about this later...
+    main = click.argument('scripts', nargs=-1, required=True)(main)
+
+    # args = p.parse_args()
+    # PyInstaller.log.__process_options(p, args)
 
     # Split pathex by using the path separator
-    temppaths = args.pathex[:]
-    args.pathex = []
-    for p in temppaths:
-        args.pathex.extend(p.split(os.pathsep))
+    # temppaths = args.pathex[:]
+    # args.pathex = []
+    # for p in temppaths:
+    #     args.pathex.extend(p.split(os.pathsep))
 
     try:
-        name = PyInstaller.building.makespec.main(args.scriptname, **vars(args))
-        print('wrote %s' % name)
-        print('now run pyinstaller.py to build the executable')
+        name = main(standalone_mode=True)
     except KeyboardInterrupt:
         raise SystemExit("Aborted by user request.")
+
 
 if __name__ == '__main__':
     run()

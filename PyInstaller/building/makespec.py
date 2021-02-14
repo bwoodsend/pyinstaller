@@ -1,4 +1,4 @@
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Copyright (c) 2005-2021, PyInstaller Development Team.
 #
 # Distributed under the terms of the GNU General Public License (version 2
@@ -7,7 +7,7 @@
 # The full license is in the file COPYING.txt, distributed with this software.
 #
 # SPDX-License-Identifier: (GPL-2.0-or-later WITH Bootloader-exception)
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 
 
 """
@@ -16,7 +16,8 @@ Automatically build spec files containing a description of the project
 
 import os
 import sys
-import argparse
+
+import click
 
 from .. import HOMEPATH, DEFAULT_SPECPATH
 from .. import log as logging
@@ -60,22 +61,24 @@ def make_path_spec_relative(filename, spec_dir):
 # Same thing could be done for other paths too.
 path_conversions = (
     (HOMEPATH, "HOMEPATH"),
-    )
+)
 
 
-def add_data_or_binary(string):
-    try:
-        src, dest = string.split(add_command_sep)
-    except ValueError as e:
-        # Split into SRC and DEST failed, wrong syntax
-        raise argparse.ArgumentError(
-            "Wrong syntax, should be SRC{}DEST".format(add_command_sep)
-        ) from e
-    if not src or not dest:
-        # Syntax was correct, but one or both of SRC and DEST was not given
-        raise argparse.ArgumentError("You have to specify both SRC and DEST")
-    # Return tuple containing SRC and SRC
-    return (src, dest)
+class AddDataOrBinary(click.ParamType):
+    name = f"source{add_command_sep}dest pair"
+    def convert(self, value, param, ctx):
+        try:
+            src, dest = value.split(add_command_sep)
+        except ValueError as e:
+            # Split into SRC and DEST failed, wrong syntax
+            self.fail(
+                f"Wrong syntax, should be SRC{add_command_sep}DEST"
+            )
+        if not src or not dest:
+            # Syntax was correct, but one or both of SRC and DEST was not given
+            self.fail("You have to specify both SRC and DEST")
+        # Return tuple containing SRC and SRC
+        return (src, dest)
 
 
 def make_variable_path(filename, conversions=path_conversions):
@@ -86,7 +89,7 @@ def make_variable_path(filename, conversions=path_conversions):
         return None, filename
     for (from_path, to_name) in conversions:
         assert os.path.abspath(from_path) == from_path, (
-            "path '%s' should already be absolute" % from_path)
+                "path '%s' should already be absolute" % from_path)
         try:
             common_path = os.path.commonpath([filename, from_path])
         except ValueError:
@@ -117,216 +120,223 @@ class Path:
         return "os.path.join(" + self.variable_prefix + "," + repr(self.filename_suffix) + ")"
 
 
-def __add_options(parser):
+def __add_options(func):
     """
     Add the `Makespec` options to a option-parser instance or a
     option group.
     """
-    g = parser.add_argument_group('What to generate')
-    g.add_argument("-D", "--onedir", dest="onefile",
-                   action="store_false", default=False,
-                   help="Create a one-folder bundle containing an executable (default)")
-    g.add_argument("-F", "--onefile", dest="onefile",
-                   action="store_true", default=False,
-                   help="Create a one-file bundled executable.")
-    g.add_argument("--specpath", metavar="DIR",
-                   help="Folder to store the generated spec file "
-                        "(default: current directory)")
-    g.add_argument("-n", "--name",
-                   help="Name to assign to the bundled app and spec file "
-                        "(default: first script's basename)")
+    options = [
+        click.command(),
+        click.option("-D", "--onedir", "onefile", is_flag=True,
+                     help="Create a one-folder bundle "
+                          "containing an executable (default)"),
+        click.option("-F", "--onefile", "onefile", is_flag=True,
+                     help="Create a one-file bundled executable."),
+        click.option("--specpath", "DIR",
+                     help="Folder to store the generated spec file"
+                          " (default: current directory)"),
+        click.option("-name", "--name",
+                     help="Name to assign to the bundled app and spec"
+                          " file(default: first script's basename)"),
+        click.option('--add-data', 'datas',
+                     multiple=True, default=[], type=AddDataOrBinary(),
+                     help="Additional non-binary files or folders"
+                          " to be added to the executable. The"
+                          " path separator  is platform specific,"
+                          " ``os.pathsep`` (which is ``;`` on"
+                          " Windows and ``:`` on most unix systems)"
+                          " is used. This option can be used"
+                          " multiple times."),
+        click.option('--add-binary',
+                     multiple=True, default=[], type=AddDataOrBinary(),
+                     help="Additional binary files to be added to"
+                          " the executable. See the ``--add-data``"
+                          " option for more details. This option"
+                          " can be used multiple times."),
+        click.option("-p", "--paths",
+                     multiple=True, default=[],
+                     help="A path to search for imports (like using"
+                          " PYTHONPATH).Multiple paths are allowed,"
+                          " separated by %s, or use this option"
+                          " multiple times."
+                          % repr(os.pathsep)),
+        click.option('--hidden-import', '--hiddenimport',
+                       multiple=True,  default=[],
+                       help="Name an import not visible in the code"
+                            " of the script(s). This option can be"
+                            " used multiple times."),
+        click.option("--additional-hooks-dir", multiple=True,
+                       default=[],
+                       help="An additional path to search for hooks."
+                            "This option can be used multiple times."),
+        click.option('--runtime-hook', multiple=True, default=[],
+                       help=" Path to a custom runtime hook file. A"
+                            " runtime hook is code that is bundled"
+                            " with the executable and is executed"
+                            " before any other code or module to set"
+                            " up special features of the runtime"
+                            " environment. This option can be used"
+                            " multiple times."),
+        click.option('--exclude-module', multiple=True,
+                       default=[],
+                       help="Optional module or package (the Python"
+                             " name, not the path name) that will be"
+                             " ignored (as though it was not found)."
+                             " This option can be used multiple times.)"),
+        click.option('--key',
+                       help="The key used to encrypt Python bytecode."),
 
-    g = parser.add_argument_group('What to bundle, where to search')
-    g.add_argument('--add-data',
-                   action='append', default=[], type=add_data_or_binary,
-                   metavar='<SRC;DEST or SRC:DEST>', dest='datas',
-                   help='Additional non-binary files or folders to be added '
-                        'to the executable. The path separator  is platform '
-                        'specific, ``os.pathsep`` (which is ``;`` on Windows '
-                        'and ``:`` on most unix systems) is used. This option '
-                        'can be used multiple times.')
-    g.add_argument('--add-binary',
-                   action='append', default=[], type=add_data_or_binary,
-                   metavar='<SRC;DEST or SRC:DEST>', dest="binaries",
-                   help='Additional binary files to be added to the executable. '
-                        'See the ``--add-data`` option for more details. '
-                        'This option can be used multiple times.')
-    g.add_argument("-p", "--paths", dest="pathex",
-                   metavar="DIR", action="append", default=[],
-                   help="A path to search for imports (like using PYTHONPATH). "
-                        "Multiple paths are allowed, separated "
-                        "by %s, or use this option multiple times"
-                        % repr(os.pathsep))
-    g.add_argument('--hidden-import', '--hiddenimport',
-                   action='append', default=[],
-                   metavar="MODULENAME", dest='hiddenimports',
-                   help='Name an import not visible in the code of the script(s). '
-                   'This option can be used multiple times.')
-    g.add_argument("--additional-hooks-dir", action="append", dest="hookspath",
-                   default=[],
-                   help="An additional path to search for hooks. "
-                        "This option can be used multiple times.")
-    g.add_argument('--runtime-hook', action='append', dest='runtime_hooks',
-                   default=[],
-                   help='Path to a custom runtime hook file. A runtime hook '
-                   'is code that is bundled with the executable and '
-                   'is executed before any other code or module '
-                   'to set up special features of the runtime environment. '
-                   'This option can be used multiple times.')
-    g.add_argument('--exclude-module', dest='excludes', action='append',
-                   default=[],
-                   help='Optional module or package (the Python name, '
-                   'not the path name) that will be ignored (as though '
-                   'it was not found). '
-                   'This option can be used multiple times.')
-    g.add_argument('--key', dest='key',
-                   help='The key used to encrypt Python bytecode.')
+        click.option("-d", "--debug",
+                       # If this option is not specified, then its default value is
+                       # an empty list (no debug options selected).
+                       default=[],
+                       # The options specified must come from this list.
+                       type=click.Choice(DEBUG_ALL_CHOICE + DEBUG_ARGUMENT_CHOICES),
+                       # Append choice, rather than storing them (which would
+                       # overwrite any previous selections).
+                       multiple=True,
+                       help="Provide assistance with debugging a\n"
+                             "frozen application. This argument may\n"
+                             "be provided multiple times to select\n"
+                             "several of the following options.\n"
+                             "- all: All three of the following\n"
+                             "options.\n"
+                             "\n"
+                             "- imports: specify the -v option to\n"
+                             "the underlying Python interpreter,\n "
+                             "causing it to print a message each\n"
+                             "time a module is initialized, showing\n"
+                             "the place\n"
+                             "(filename or built-in module)\n"
+                             "from which it is loaded. See\n"
+                             "https://docs.python.org/3/using/cmdline.html#id4.\n"
+                             "\n"
+                             "- bootloader: tell the bootloader to\n"
+                             "issue progress messages while\n"
+                             "initializing and starting the bundled\n"
+                             "app. Used to diagnose problems with\n"
+                             "missing imports.\n"
+                             "\n"
+                             "- noarchive: instead of storing all\n"
+                             "frozen Python source files as an\n"
+                             "archive inside the resulting\n"
+                             "executable, store them as files in the\n "
+                             "resulting output directory.\n"
+                             "\n"),
+        click.option("-s", "--strip", is_flag=True,
+                       help="Apply a symbol-table strip to the"
+                            " executable and shared libs (not"
+                            " recommended for Windows)"),
+        click.option("--noupx", is_flag=True,
+                       help="Do not use UPX even if it is available"
+                            " (works differently between Windows and"
+                            " *nix)"),
+        click.option("--upx-exclude", default=[], multiple=True,
+                       help="Prevent a binary from being compressed"
+                            " when using upx. This is typically used"
+                            " if upx corrupts certain binaries during"
+                            " compression. FILE is the filename of the"
+                            " binary without path.  This option can be"
+                            " used multiple times."),
+        click.option("-c", "--console", "--nowindowed",
+                       is_flag=True,
+                       help="Open a console window for standard i/o"
+                            " (default). On Windows this option will"
+                            " have no effect if the  first script is a"
+                            " '.pyw' file."),
+        click.option("-w", "--windowed", "--noconsole",
+                       is_flag=True,
+                       help="Windows and Mac OS X: do not provide a"
+                            " console window for standard i/o. On"
+                            " Mac OS X this also triggers building an"
+                            " OS X .app bundle. On Windows this option"
+                            " will be set if the first script is a"
+                            " '.pyw' file. This option is ignored in"
+                            " *NIX systems."),
+        click.option("-i", "--icon",
+                       help="FILE.ico: apply that icon to a Windows"
+                            " executable."
+                            " FILE.exe,ID, extract the icon with ID"
+                            " from an exe."
+                            " FILE.icns: apply the icon to the .app"
+                            " bundle on Mac OS X."
+                            " Use 'NONE' to not apply any icon,"
+                            " thereby making the OS to show some"
+                            " default"
+                            " (default: apply PyInstaller's icon)"),
+        click.option("--version-file",
+                       help="add a version resource from FILE to the"
+                            "exe"),
+        click.option("-m", "--manifest",
+                       help="add manifest FILE or XML to the exe"),
+        click.option("-r", "--resource", default=[], multiple=True,
+                       help="Add or update a resource to a Windows"
+                            " executable. The RESOURCE is one to four"
+                            " items,  FILE[,TYPE[,NAME[,LANGUAGE]]]."
+                            " FILE can be a data file or an exe/dll."
+                            " For data files, at least TYPE and NAME"
+                            " must be specified. LANGUAGE defaults"
+                            " to 0 or may be specified as"
+                            " wildcard * to update all resources of the"
+                            " given TYPE and NAME. For exe/dll files,"
+                            " all resources from FILE will be"
+                            " added/updated to the final executable"
+                            " if TYPE, NAME and LANGUAGE are omitted"
+                            " or specified as wildcard *."),
+        click.option('--uac-admin', is_flag=True,
+                       help="Using this option creates a Manifest"
+                            " which will request elevation upon"
+                            " application restart."),
+        click.option('--uac-uiaccess', is_flag=True,
+                       help="Using this option allows an elevated"
+                            " application to work with Remote"
+                            " Desktop."),
+        click.option("--win-private-assemblies", is_flag=True,
+                       help="Any Shared Assemblies bundled into the"
+                            " application will be changed into Private"
+                            " Assemblies. This means the exact"
+                            " versions of these assemblies will always"
+                            " be used, and any newer versions installed"
+                            " on user machines at the system level will"
+                            " be ignored."),
+        click.option("--win-no-prefer-redirects", is_flag=True,
+                       help="While searching for Shared or Private"
+                            " Assemblies to bundle into the application,"
+                            " PyInstaller will prefer not to follow"
+                            " policies that redirect to newer versions,"
+                            " and will try to bundle the exact versions"
+                            " of the assembly."),
+        click.option('--osx-bundle-identifier',
+                       help="Mac OS X .app bundle identifier is used"
+                            " as the default unique program name for"
+                            " code signing purposes. The usual form is"
+                            " a hierarchical name in reverse DNS"
+                            " notation."
+                            " For example:"
+                            " com.mycompany.department.appname"
+                            " (default: first script's basename)"),
+        click.option("--runtime-tmpdir",
+                       help="Where to extract libraries and support"
+                            " files in `onefile`-mode."
+                            " If this option is given, the bootloader"
+                            " will ignore any temp-folder location"
+                            " defined by the run-time OS."
+                            " ``_MEIxxxxxx``-folder will be created"
+                            " here. Please use this option only if you"
+                            " know what you are doing."),
+        click.option("--bootloader-ignore-signals", is_flag=True,
+                       help=("Tell the bootloader to ignore signals"
+                             " rather than forwarding them to the child"
+                             " process. Useful in situations where e.g."
+                             " a supervisor process signals both the"
+                             " bootloader and child"
+                             " (e.g. via a process group) to avoid"
+                             " signalling the child twice."))
+    ]
 
-    g = parser.add_argument_group('How to generate')
-    g.add_argument("-d", "--debug",
-                   # If this option is not specified, then its default value is
-                   # an empty list (no debug options selected).
-                   default=[],
-                   # Note that ``nargs`` is omitted. This produces a single item
-                   # not stored in a list, as opposed to list containing one
-                   # item, per `nargs <https://docs.python.org/3/library/argparse.html#nargs>`_.
-                   nargs=None,
-                   # The options specified must come from this list.
-                   choices=DEBUG_ALL_CHOICE + DEBUG_ARGUMENT_CHOICES,
-                   # Append choice, rather than storing them (which would
-                   # overwrite any previous selections).
-                   action='append',
-                   # Allow newlines in the help text; see the
-                   # ``_SmartFormatter`` in ``__main__.py``.
-                   help=("R|Provide assistance with debugging a frozen\n"
-                         "application. This argument may be provided multiple\n"
-                         "times to select several of the following options.\n"
-                         "\n"
-                         "- all: All three of the following options.\n"
-                         "\n"
-                         "- imports: specify the -v option to the underlying\n"
-                         "  Python interpreter, causing it to print a message\n"
-                         "  each time a module is initialized, showing the\n"
-                         "  place (filename or built-in module) from which it\n"
-                         "  is loaded. See\n"
-                         "  https://docs.python.org/3/using/cmdline.html#id4.\n"
-                         "\n"
-                         "- bootloader: tell the bootloader to issue progress\n"
-                         "  messages while initializing and starting the\n"
-                         "  bundled app. Used to diagnose problems with\n"
-                         "  missing imports.\n"
-                         "\n"
-                         "- noarchive: instead of storing all frozen Python\n"
-                         "  source files as an archive inside the resulting\n"
-                         "  executable, store them as files in the resulting\n"
-                         "  output directory.\n"
-                         "\n"))
-    g.add_argument("-s", "--strip", action="store_true",
-                   help="Apply a symbol-table strip to the executable and shared libs "
-                        "(not recommended for Windows)")
-    g.add_argument("--noupx", action="store_true", default=False,
-                   help="Do not use UPX even if it is available "
-                        "(works differently between Windows and *nix)")
-    g.add_argument("--upx-exclude", dest="upx_exclude", metavar="FILE",
-                   action="append",
-                   help="Prevent a binary from being compressed when using "
-                        "upx. This is typically used if upx corrupts certain "
-                        "binaries during compression. "
-                        "FILE is the filename of the binary without path. "
-                        "This option can be used multiple times.")
-
-    g = parser.add_argument_group('Windows and Mac OS X specific options')
-    g.add_argument("-c", "--console", "--nowindowed", dest="console",
-                   action="store_true", default=True,
-                   help="Open a console window for standard i/o (default). "
-                        "On Windows this option will have no effect if the "
-                        "first script is a '.pyw' file.")
-    g.add_argument("-w", "--windowed", "--noconsole", dest="console",
-                   action="store_false",
-                   help="Windows and Mac OS X: do not provide a console window "
-                        "for standard i/o. "
-                        "On Mac OS X this also triggers building an OS X .app bundle. "
-                        "On Windows this option will be set if the first "
-                        "script is a '.pyw' file. "
-                        "This option is ignored in *NIX systems.")
-    g.add_argument("-i", "--icon", dest="icon_file",
-                   metavar='<FILE.ico or FILE.exe,ID or FILE.icns or "NONE">',
-                   help="FILE.ico: apply that icon to a Windows executable. "
-                        "FILE.exe,ID, extract the icon with ID from an exe. "
-                        "FILE.icns: apply the icon to the "
-                        ".app bundle on Mac OS X. "
-                        'Use "NONE" to not apply any icon, '
-                        "thereby making the OS to show some default "
-                        "(default: apply PyInstaller's icon)")
-
-    g = parser.add_argument_group('Windows specific options')
-    g.add_argument("--version-file",
-                   dest="version_file", metavar="FILE",
-                   help="add a version resource from FILE to the exe")
-    g.add_argument("-m", "--manifest", metavar="<FILE or XML>",
-                   help="add manifest FILE or XML to the exe")
-    g.add_argument("-r", "--resource", dest="resources",
-                   metavar="RESOURCE", action="append",
-                   default=[],
-                   help="Add or update a resource to a Windows executable. "
-                        "The RESOURCE is one to four items, "
-                        "FILE[,TYPE[,NAME[,LANGUAGE]]]. "
-                        "FILE can be a "
-                        "data file or an exe/dll. For data files, at least "
-                        "TYPE and NAME must be specified. LANGUAGE defaults "
-                        "to 0 or may be specified as wildcard * to update all "
-                        "resources of the given TYPE and NAME. For exe/dll "
-                        "files, all resources from FILE will be added/updated "
-                        "to the final executable if TYPE, NAME and LANGUAGE "
-                        "are omitted or specified as wildcard *."
-                        "This option can be used multiple times.")
-    g.add_argument('--uac-admin', dest='uac_admin', action="store_true", default=False,
-                   help='Using this option creates a Manifest '
-                        'which will request elevation upon application restart.')
-    g.add_argument('--uac-uiaccess', dest='uac_uiaccess', action="store_true", default=False,
-                   help='Using this option allows an elevated application to '
-                        'work with Remote Desktop.')
-
-    g = parser.add_argument_group('Windows Side-by-side Assembly searching options (advanced)')
-    g.add_argument("--win-private-assemblies", dest="win_private_assemblies",
-                   action="store_true",
-                   help="Any Shared Assemblies bundled into the application "
-                        "will be changed into Private Assemblies. This means "
-                        "the exact versions of these assemblies will always "
-                        "be used, and any newer versions installed on user "
-                        "machines at the system level will be ignored.")
-    g.add_argument("--win-no-prefer-redirects", dest="win_no_prefer_redirects",
-                   action="store_true",
-                   help="While searching for Shared or Private Assemblies to "
-                        "bundle into the application, PyInstaller will prefer "
-                        "not to follow policies that redirect to newer versions, "
-                        "and will try to bundle the exact versions of the assembly.")
-
-
-    g = parser.add_argument_group('Mac OS X specific options')
-    g.add_argument('--osx-bundle-identifier', dest='bundle_identifier',
-                   help='Mac OS X .app bundle identifier is used as the default unique program '
-                        'name for code signing purposes. The usual form is a hierarchical name '
-                        'in reverse DNS notation. For example: com.mycompany.department.appname '
-                        "(default: first script's basename)")
-
-    g = parser.add_argument_group('Rarely used special options')
-    g.add_argument("--runtime-tmpdir", dest="runtime_tmpdir", metavar="PATH",
-                   help="Where to extract libraries and support files in "
-                        "`onefile`-mode. "
-                        "If this option is given, the bootloader will ignore "
-                        "any temp-folder location defined by the run-time OS. "
-                        "The ``_MEIxxxxxx``-folder will be created here. "
-                        "Please use this option only if you know what you "
-                        "are doing.")
-    g.add_argument("--bootloader-ignore-signals", action="store_true",
-                   default=False,
-                   help=("Tell the bootloader to ignore signals rather "
-                         "than forwarding them to the child process. "
-                         "Useful in situations where e.g. a supervisor "
-                         "process signals both the bootloader and child "
-                         "(e.g. via a process group) to avoid signalling "
-                         "the child twice."))
+    for option in options:
+        func = option(func)
+    return func
 
 
 def main(scripts, name=None, onefile=None,
