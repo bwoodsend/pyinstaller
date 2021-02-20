@@ -32,7 +32,7 @@ def run():
                               "the dependencies should be shown"))
 
     args = parser.parse_args()
-    PyInstaller.log.__process_options(parser, args)
+    PyInstaller.log.__process_options(args)
 
     # Suppress all informative messages from the dependency code.
     PyInstaller.log.getLogger('PyInstaller.build.bindepend').setLevel(

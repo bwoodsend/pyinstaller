@@ -259,7 +259,7 @@ def run():
                         help="pyinstaller archive to show content of")
 
     args = parser.parse_args()
-    PyInstaller.log.__process_options(parser, args)
+    PyInstaller.log.__process_options(args)
 
     try:
         raise SystemExit(main(**vars(args)))

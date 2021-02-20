@@ -1,4 +1,4 @@
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 # Copyright (c) 2013-2021, PyInstaller Development Team.
 #
 # Distributed under the terms of the GNU General Public License (version 2
@@ -7,7 +7,7 @@
 # The full license is in the file COPYING.txt, distributed with this software.
 #
 # SPDX-License-Identifier: (GPL-2.0-or-later WITH Bootloader-exception)
-#-----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
 
 
 """
@@ -19,6 +19,8 @@ __all__ = ['getLogger', 'INFO', 'WARN', 'DEBUG', 'TRACE', 'ERROR', 'FATAL']
 import logging
 from logging import getLogger, INFO, WARN, DEBUG, ERROR, FATAL
 
+import click
+
 TRACE = logging.TRACE = DEBUG - 5
 logging.addLevelName(TRACE, 'TRACE')
 
@@ -27,22 +29,21 @@ logging.basicConfig(format=FORMAT, level=logging.INFO)
 logger = getLogger('PyInstaller')
 
 
-def __add_options(parser):
+def __add_options(func):
     levels = ('TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR', 'CRITICAL')
-    parser.add_argument('--log-level',
-                        choices=levels, metavar="LEVEL",
+    return click.option('--log-level',
+                        type=click.Choice(levels),
                         default='INFO',
-                        dest='loglevel',
-                        help=('Amount of detail in build-time console messages. '
-                              'LEVEL may be one of %s (default: %%(default)s).'
-                              % ', '.join(levels))
-    )
+                        help=f"Amount of detail in build-time console "
+                             f"messages. LEVEL may be one of "
+                             f"{', '.join(levels)}  (default: %%(default)s)."
+                        )(func)
 
 
-def __process_options(parser, opts):
+def __process_options(opts):
     try:
         level = getattr(logging, opts.loglevel.upper())
     except AttributeError:
-        parser.error('Unknown log level `%s`' % opts.loglevel)
+        raise click.ClickException('Unknown log level `%s`' % opts.loglevel)
     else:
         logger.setLevel(level)

@@ -25,6 +25,8 @@ import sys
 
 import pkg_resources
 
+import click
+
 
 # Relative imports to PyInstaller modules.
 from .. import HOMEPATH, DEFAULT_DISTPATH, DEFAULT_WORKPATH
@@ -671,28 +673,36 @@ def build(spec, distpath, workpath, clean_build):
         raise SystemExit('spec "{}" not found'.format(spec))
     exec(code, spec_namespace)
 
-def __add_options(parser):
-    parser.add_argument("--distpath", metavar="DIR",
-                        default=DEFAULT_DISTPATH,
-                        help=('Where to put the bundled app (default: %s)' %
-                              os.path.join(os.curdir, 'dist')))
-    parser.add_argument('--workpath', default=DEFAULT_WORKPATH,
-                        help=('Where to put all the temporary work files, '
-                              '.log, .pyz and etc. (default: %s)' %
-                              os.path.join(os.curdir, 'build')))
-    parser.add_argument('-y', '--noconfirm',
-                        action="store_true", default=False,
-                        help='Replace output directory (default: %s) without '
-                        'asking for confirmation' % os.path.join('SPECPATH', 'dist', 'SPECNAME'))
-    parser.add_argument('--upx-dir', default=None,
-                        help='Path to UPX utility (default: search the execution path)')
-    parser.add_argument("-a", "--ascii", action="store_true",
-                        help="Do not include unicode encoding support "
-                        "(default: included if available)")
-    parser.add_argument('--clean', dest='clean_build', action='store_true',
-                        default=False,
-                        help='Clean PyInstaller cache and remove temporary '
-                        'files before building.')
+
+def __add_options(func):
+    options = [
+        click.option("--distpath", default=DEFAULT_DISTPATH,
+                            help=(f"Where to put the bundled app"
+                                  f" (default:"
+                                  f" {os.path.join(os.curdir, 'dist')})")),
+        click.option('--workpath', default=DEFAULT_WORKPATH,
+                            help=(f"Where to put all the temporary work files,"
+                                  f" .log, .pyz and etc. (default: "
+                                  f" {os.path.join(os.curdir, 'build')})")),
+        click.option('-y', '--noconfirm', is_flag=True,
+                            help=f"Replace output directory (default: "
+                                 f" {os.path.join('SPECPATH', 'dist', 'SPECNAME')})"
+                                 f" without asking for confirmation"),
+        click.option('--upx-dir', default=None,
+                            help="Path to UPX utility (default: search the"
+                                 " execution path)"),
+        click.option("-a", "--ascii", is_flag=True,
+                            help="Do not include unicode encoding support"
+                                 " (default: included if available)"),
+        click.option('--clean', is_flag=True,
+                            help='Clean PyInstaller cache and remove temporary '
+                                 'files before building.')
+    ]
+    for option in options:
+        func = option(func)
+    return func
+
+
 
 
 def main(pyi_config, specfile, noconfirm, ascii=False, **kw):

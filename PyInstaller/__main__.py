@@ -18,6 +18,8 @@ import os
 import argparse
 import platform
 
+import click
+
 
 from . import __version__
 from . import log as logging
@@ -65,10 +67,11 @@ def run_build(pyi_config, spec_file, **kwargs):
     PyInstaller.building.build_main.main(pyi_config, spec_file, **kwargs)
 
 
-def __add_options(parser):
-    parser.add_argument('-v', '--version', action='version',
+def __add_options(func):
+    return click.version_option('-v', '--version',
                         version=__version__,
-                        help='Show program version info and exit.')
+                        help='Show program version info and exit.')(func)
+
 
 def run(pyi_args=None, pyi_config=None):
     """
@@ -82,19 +85,20 @@ def run(pyi_args=None, pyi_config=None):
     import PyInstaller.log
 
     try:
-        parser = argparse.ArgumentParser(formatter_class=_SmartFormatter)
-        __add_options(parser)
-        PyInstaller.building.makespec.__add_options(parser)
-        PyInstaller.building.build_main.__add_options(parser)
-        PyInstaller.log.__add_options(parser)
-        parser.add_argument('filenames', metavar='scriptname', nargs='+',
-                            help=("name of scriptfiles to be processed or "
-                                  "exactly one .spec-file. If a .spec-file is "
-                                  "specified, most options are unnecessary "
-                                  "and are ignored."))
+        options = PyInstaller.building.makespec.__add_options(run_makespec)
+        options = __add_options(options)
+        # carry on from here - wrap run_makespec in all the click.option decorators.
+        options = PyInstaller.building.build_main.__add_options(options)
+        options = PyInstaller.log.__add_options(options)
+        options = click.option('filenames', metavar='scriptname',
+                               required=True,
+                            help=("name of scriptfiles to be processed or"
+                                  " exactly one .spec-file. If a .spec-file is"
+                                  " specified, most options are unnecessary"
+                                  " and are ignored."))(options)
 
-        args = parser.parse_args(pyi_args)
-        PyInstaller.log.__process_options(parser, args)
+        args = click.parse_args(pyi_args)
+        PyInstaller.log.__process_options(args)
 
         # Print PyInstaller version, Python version and platform
         # as the first line to stdout.
