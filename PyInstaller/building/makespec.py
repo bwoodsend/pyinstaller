@@ -127,12 +127,11 @@ def __add_options(func):
     """
     options = [
         click.command(),
-        click.option("-D", "--onedir", "onefile", is_flag=True,
-                     help="Create a one-folder bundle "
+        click.option("-F/-D", "--onefile/--onedir", "onefile", is_flag=True,
+                     help="Create a one-file bundled executable. "
+                          "Otherwise create a one-folder bundle "
                           "containing an executable (default)"),
-        click.option("-F", "--onefile", "onefile", is_flag=True,
-                     help="Create a one-file bundled executable."),
-        click.option("--specpath", "DIR",
+        click.option("--specpath",
                      help="Folder to store the generated spec file"
                           " (default: current directory)"),
         click.option("-name", "--name",
@@ -147,29 +146,29 @@ def __add_options(func):
                           " Windows and ``:`` on most unix systems)"
                           " is used. This option can be used"
                           " multiple times."),
-        click.option('--add-binary',
+        click.option('--add-binary', 'binaries',
                      multiple=True, default=[], type=AddDataOrBinary(),
                      help="Additional binary files to be added to"
                           " the executable. See the ``--add-data``"
                           " option for more details. This option"
                           " can be used multiple times."),
-        click.option("-p", "--paths",
+        click.option("-p", "--path", "pathex",
                      multiple=True, default=[],
                      help="A path to search for imports (like using"
                           " PYTHONPATH).Multiple paths are allowed,"
                           " separated by %s, or use this option"
                           " multiple times."
                           % repr(os.pathsep)),
-        click.option('--hidden-import', '--hiddenimport',
+        click.option('--hidden-import', '--hiddenimport', 'hiddenimports',
                        multiple=True,  default=[],
                        help="Name an import not visible in the code"
                             " of the script(s). This option can be"
                             " used multiple times."),
-        click.option("--additional-hooks-dir", multiple=True,
+        click.option("--additional-hooks-dir", "hookspath", multiple=True,
                        default=[],
                        help="An additional path to search for hooks."
                             "This option can be used multiple times."),
-        click.option('--runtime-hook', multiple=True, default=[],
+        click.option('--runtime-hook', "runtime_hooks", multiple=True, default=[],
                        help=" Path to a custom runtime hook file. A"
                             " runtime hook is code that is bundled"
                             " with the executable and is executed"
@@ -177,7 +176,7 @@ def __add_options(func):
                             " up special features of the runtime"
                             " environment. This option can be used"
                             " multiple times."),
-        click.option('--exclude-module', multiple=True,
+        click.option('--exclude-module', "excludes", multiple=True,
                        default=[],
                        help="Optional module or package (the Python"
                              " name, not the path name) that will be"
@@ -238,14 +237,8 @@ def __add_options(func):
                             " compression. FILE is the filename of the"
                             " binary without path.  This option can be"
                             " used multiple times."),
-        click.option("-c", "--console", "--nowindowed",
-                       is_flag=True,
-                       help="Open a console window for standard i/o"
-                            " (default). On Windows this option will"
-                            " have no effect if the  first script is a"
-                            " '.pyw' file."),
-        click.option("-w", "--windowed", "--noconsole",
-                       is_flag=True,
+        click.option("-c/-w", "--console/--no-console",
+                     "--nowindowed/--windowed", is_flag=True, default=True,
                        help="Windows and Mac OS X: do not provide a"
                             " console window for standard i/o. On"
                             " Mac OS X this also triggers building an"
@@ -253,7 +246,7 @@ def __add_options(func):
                             " will be set if the first script is a"
                             " '.pyw' file. This option is ignored in"
                             " *NIX systems."),
-        click.option("-i", "--icon",
+        click.option("-i", "--icon", "icon_file",
                        help="FILE.ico: apply that icon to a Windows"
                             " executable."
                             " FILE.exe,ID, extract the icon with ID"
@@ -269,7 +262,7 @@ def __add_options(func):
                             "exe"),
         click.option("-m", "--manifest",
                        help="add manifest FILE or XML to the exe"),
-        click.option("-r", "--resource", default=[], multiple=True,
+        click.option("-r", "--resource", "resources", default=[], multiple=True,
                        help="Add or update a resource to a Windows"
                             " executable. The RESOURCE is one to four"
                             " items,  FILE[,TYPE[,NAME[,LANGUAGE]]]."
@@ -306,7 +299,7 @@ def __add_options(func):
                             " policies that redirect to newer versions,"
                             " and will try to bundle the exact versions"
                             " of the assembly."),
-        click.option('--osx-bundle-identifier',
+        click.option('--osx-bundle-identifier', 'bundle_identifier',
                        help="Mac OS X .app bundle identifier is used"
                             " as the default unique program name for"
                             " code signing purposes. The usual form is"
