@@ -23,8 +23,8 @@ import PyInstaller.log
 
 def verbose_makespec(*args, **kwargs):
     name = makespec.main(*args, **kwargs)
-    print('wrote %s' % name)
-    print('now run pyinstaller.py to build the executable')
+    print('Wrote %s' % name)
+    print(f'Now run pyinstaller {os.path.relpath(name)} to build the executable')
 
 
 def run():

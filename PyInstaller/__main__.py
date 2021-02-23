@@ -16,6 +16,7 @@ Main command-line interface to PyInstaller.
 
 import os
 import argparse
+import sys
 import platform
 
 import click
@@ -68,9 +69,40 @@ def run_build(pyi_config, spec_file, **kwargs):
 
 
 def __add_options(func):
-    return click.version_option('-v', '--version',
-                        version=__version__,
-                        help='Show program version info and exit.')(func)
+    """"name of scriptfiles to be processed or"
+       " exactly one .spec-file. If a .spec-file is"
+                       " specified, most options are unnecessary"
+                       " and are ignored."""
+    func = click.version_option(version=__version__)(func)
+    func = click.argument('filenames', metavar='scriptname',
+                          required=True, nargs=-1)(func)
+    return func
+
+
+from PyInstaller.building.makespec import __add_options as makespec_options
+from PyInstaller.log import __add_options as log_options
+from PyInstaller.building.build_main import __add_options as build_main_options
+
+
+@makespec_options
+@__add_options
+@log_options
+@build_main_options
+def _parse_options(**kwargs):
+    return kwargs
+
+
+def parse_options(args=None, terminate_on_error=False):
+    """"""
+    if args is None:
+        args = sys.argv[1:]
+    if terminate_on_error:
+        try:
+            return _parse_options(args, standalone_mode=True)
+        except SystemExit as ex:
+            if ex.code:
+                raise
+    return _parse_options(args, standalone_mode=False)
 
 
 def run(pyi_args=None, pyi_config=None):
@@ -80,25 +112,8 @@ def run(pyi_args=None, pyi_config=None):
     """
     check_requirements()
 
-    import PyInstaller.building.makespec
-    import PyInstaller.building.build_main
-    import PyInstaller.log
-
     try:
-        options = PyInstaller.building.makespec.__add_options(run_makespec)
-        options = __add_options(options)
-        # carry on from here - wrap run_makespec in all the click.option decorators.
-        options = PyInstaller.building.build_main.__add_options(options)
-        options = PyInstaller.log.__add_options(options)
-        options = click.option('filenames', metavar='scriptname',
-                               required=True,
-                            help=("name of scriptfiles to be processed or"
-                                  " exactly one .spec-file. If a .spec-file is"
-                                  " specified, most options are unnecessary"
-                                  " and are ignored."))(options)
-
-        args = click.parse_args(pyi_args)
-        PyInstaller.log.__process_options(args)
+        args = parse_options(pyi_args, terminate_on_error=True)
 
         # Print PyInstaller version, Python version and platform
         # as the first line to stdout.
@@ -110,12 +125,13 @@ def run(pyi_args=None, pyi_config=None):
         logger.info('Platform: %s' % platform.platform())
 
         # Skip creating .spec when .spec file is supplied
-        if args.filenames[0].endswith('.spec'):
-            spec_file = args.filenames[0]
+        filenames = args["filenames"]
+        if filenames[0].endswith('.spec'):
+            spec_file = filenames[0]
         else:
-            spec_file = run_makespec(**vars(args))
+            spec_file = run_makespec(**args)
 
-        run_build(pyi_config, spec_file, **vars(args))
+        run_build(pyi_config, spec_file, **args)
 
     except KeyboardInterrupt:
         raise SystemExit("Aborted by user request.")
