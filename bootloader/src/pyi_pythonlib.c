@@ -71,11 +71,11 @@ pyi_pylib_load(ARCHIVE_STATUS *status)
       uint32_t pyvers_major;
       uint32_t pyvers_minor;
 
-      pyvers_major = pyvers / 10;
-      pyvers_minor = pyvers % 10;
+      pyvers_major = pyvers / 100;
+      pyvers_minor = pyvers % 100;
 
       len = snprintf(dllname, DLLNAME_LEN,
-              "libpython%01d.%01d.a(libpython%01d.%01d.so)",
+              "libpython%d.%d.a(libpython%d.%d.so)",
               pyvers_major, pyvers_minor, pyvers_major, pyvers_minor);
     }
     else {
@@ -150,8 +150,9 @@ pyi_pylib_attach(ARCHIVE_STATUS *status, int *loadedNew)
     HMODULE dll;
     char nm[PATH_MAX + 1];
     int ret = 0;
+
     /* Get python's name */
-    sprintf(nm, "python%02d.dll", pyvers);
+    sprintf(nm, "python%d%d.dll", pyvers / 100, pyvers % 100);
 
     /* See if it's loaded */
     dll = GetModuleHandleA(nm);
@@ -558,7 +559,7 @@ pyi_pylib_import_modules(ARCHIVE_STATUS *status)
             /* .pyc/.pyo files have 8 bytes header. Skip it and load marshalled
              * data form the right point.
              */
-            if (pyvers >= 37) {
+            if (pyvers >= 307) {
                 /* Python >= 3.7 the header: size was changed to 16 bytes. */
                 co = PI_PyObject_CallFunction(loadfunc, "y#", modbuf + 16,
                                               ptoc->ulen - 16);
