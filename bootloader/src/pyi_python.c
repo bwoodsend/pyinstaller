@@ -133,7 +133,15 @@ pyi_python_map_names(HMODULE dll, int pyvers)
     GETPROC(dll, PyList_New);
     GETPROC(dll, PyLong_AsLong);
     GETPROC(dll, PyModule_GetDict);
-    GETPROC(dll, PyObject_CallFunction);
+    if (pyvers >= 310) {
+        /* With Python 3.10, using '#' format in PyObject_CallFunction
+         * requires PY_SSIZE_T_CLEAN macro to be set, which effectively
+         * switches to _PyObject_CallFunction_SizeT.
+         */
+        GETPROC_RENAMED(dll, PyObject_CallFunction, _PyObject_CallFunction_SizeT);
+    } else {
+        GETPROC(dll, PyObject_CallFunction);
+    }
     GETPROC(dll, PyObject_CallFunctionObjArgs);
     GETPROC(dll, PyObject_SetAttrString);
     GETPROC(dll, PyObject_GetAttrString);

@@ -559,17 +559,34 @@ pyi_pylib_import_modules(ARCHIVE_STATUS *status)
             /* .pyc/.pyo files have 8 bytes header. Skip it and load marshalled
              * data form the right point.
              */
-            if (pyvers >= 307) {
-                /* Python >= 3.7 the header: size was changed to 16 bytes. */
-                co = PI_PyObject_CallFunction(loadfunc, "y#", modbuf + 16,
-                                              ptoc->ulen - 16);
+            if (pyvers >= 310) {
+                /* Python >= 3.10: PI_PyObject_CallFunction is mapped to
+                 * _PyObject_CallFunction_SizeT, which expects the length
+                 * argument for y# format to be Py_ssize_t. As arguments
+                 * are passed via variadic argument list, we need to match
+                 * the underlying type size, otherwise we risk undefined
+                 * behavior.
+                 * Py_ssize_t is defined in cpython in include/pyport.h
+                 * as ssize_t, but we can use size_t to avoid having to
+                 * deal with SSIZE_T on MSVC; we need to match only type
+                 * size, and signedness does not matter for the value
+                 * range we re dealing with here). */
+                unsigned char *ptr = modbuf + 16;
+                size_t len = ptoc->ulen - 16;
+                co = PI_PyObject_CallFunction(loadfunc, "y#", ptr, len);
+            }
+            else if (pyvers >= 307) {
+                /* Python >= 3.7: the header size was changed to 16 bytes. */
+                unsigned char *ptr = modbuf + 16;
+                int len = ptoc->ulen - 16;
+                co = PI_PyObject_CallFunction(loadfunc, "y#", ptr, len);
             }
             else {
                 /* It looks like from python 3.3 the header */
                 /* size was changed to 12 bytes. */
-                co =
-                    PI_PyObject_CallFunction(loadfunc, "y#", modbuf + 12,
-                                                 ptoc->ulen - 12);
+                unsigned char *ptr = modbuf + 12;
+                int len = ptoc->ulen - 12;
+                co = PI_PyObject_CallFunction(loadfunc, "y#", ptr, len);
             };
 
             if (co != NULL) {
