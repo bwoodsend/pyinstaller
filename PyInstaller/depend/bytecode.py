@@ -98,9 +98,8 @@ def _parse_loads(raw: bytes):
     return map(_extended_arguments, _extended_arg_bytecode.findall(raw))
 
 
-def function_calls(code: CodeType):
-    """Scan a code object for all function calls on strictly constant arguments.
-    """
+def function_calls(code: CodeType) -> list:
+    """Scan a code object for all function calls on constant arguments."""
     match: re.Match
     out = []
 
@@ -129,6 +128,8 @@ def function_calls(code: CodeType):
 
 
 def search_recursively(search: callable, code: CodeType, _memo=None) -> dict:
+    """Apply a search function on a code object, recursing into child code
+    objects (function definitions)."""
     if _memo is None:
         _memo = {}
     if code not in _memo:
@@ -137,3 +138,9 @@ def search_recursively(search: callable, code: CodeType, _memo=None) -> dict:
             if isinstance(const, CodeType):
                 search_recursively(search, const, _memo)
     return _memo
+
+
+def recursive_function_calls(code: CodeType) -> dict:
+    """Scan a code object, recursing into function definitions and bodies of
+    comprehension loops, for function calls on constant arguments."""
+    return search_recursively(function_calls, code)
