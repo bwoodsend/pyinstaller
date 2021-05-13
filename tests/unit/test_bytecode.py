@@ -10,6 +10,7 @@ from PyInstaller import compat
 from PyInstaller.depend.bytecode import (
     function_calls,
     recursive_function_calls,
+    any_alias,
 )
 
 
@@ -160,3 +161,7 @@ def test_local_functions():
     code = compile_(in_a_function("import foo; foo.bar()"))
     function_code, = (i for i in code.co_consts if isinstance(i, CodeType))
     assert function_calls(function_code) == [('foo.bar', [])]
+
+
+def test_any_alias():
+    assert tuple(any_alias("foo.bar.pop")) == ("foo.bar.pop", "bar.pop", "pop")
