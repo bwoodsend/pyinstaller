@@ -625,9 +625,14 @@ getsitepackages = getattr(site, 'getsitepackages', getsitepackages)
 
 
 def importlib_load_source(name, pathname):
-    # Import module from a file.
-    mod_loader = importlib.machinery.SourceFileLoader(name, pathname)
-    return mod_loader.load_module()
+    # Import module from a file. This is taken almost word for word from:
+    # https://docs.python.org/3/library/importlib.html#importing-a-source-file-directly
+    # with the exception that we don't add the module to the module
+    # cache (sys.modules), although there's probably no harm in doing so.
+    spec = importlib.util.spec_from_file_location(name, pathname)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 # Patterns of module names that should be bundled into the base_library.zip.
