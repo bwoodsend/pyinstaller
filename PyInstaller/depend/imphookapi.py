@@ -357,6 +357,7 @@ class PostGraphAPI(object):
         self.module_graph = module_graph
         self.module = module_graph.find_node(module_name)
         assert self.module is not None  # should not occur
+        self.options = module_graph.hook_options
 
         # Immutable attributes.
         self.___name__ = module_name

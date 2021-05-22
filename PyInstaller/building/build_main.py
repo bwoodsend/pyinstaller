@@ -133,7 +133,7 @@ class Analysis(Target):
     def __init__(self, scripts, pathex=None, binaries=None, datas=None,
                  hiddenimports=None, hookspath=None, excludes=None, runtime_hooks=None,
                  cipher=None, win_no_prefer_redirects=False, win_private_assemblies=False,
-                 noarchive=False):
+                 noarchive=False, hook_options=None):
         """
         scripts
                 A list of scripts specified as file names.
@@ -242,6 +242,7 @@ class Analysis(Target):
         self.win_private_assemblies = win_private_assemblies
         self._python_version = sys.version
         self.noarchive = noarchive
+        self.hook_options = hook_options or {}
 
         self.__postinit__()
 
@@ -344,6 +345,7 @@ class Analysis(Target):
             logger.debug("Excluding module '%s'" % m)
         self.graph = initialize_modgraph(
             excludes=self.excludes, user_hook_dirs=self.hookspath)
+        self.graph.hook_options = self.hook_options
 
         # TODO Find a better place where to put 'base_library.zip' and when to created it.
         # For Python 3 it is necessary to create file 'base_library.zip'
