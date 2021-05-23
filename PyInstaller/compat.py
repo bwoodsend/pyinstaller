@@ -631,6 +631,7 @@ def importlib_load_source(name, pathname):
     # cache (sys.modules), although there's probably no harm in doing so.
     spec = importlib.util.spec_from_file_location(name, pathname)
     module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
 
