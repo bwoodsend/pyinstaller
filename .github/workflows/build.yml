@@ -1,0 +1,32 @@
+on:
+  workflow_dispatch:
+  push:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          ref: develop
+          repository: pyinstaller/pyinstaller
+      - run: cd bootloader && python waf all
+      - run: cd bootloader && python waf --target-arch=32bit all
+      - run: cd bootloader && python waf --target-arch=64bit-arm all
+      - uses: actions/upload-artifact@v2
+        with:
+          name: PyInstaller
+          path: PyInstaller/bootloa?er/Windows*
+
+  macOS:
+    runs-on: macos-11.0
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          ref: develop
+          repository: pyinstaller/pyinstaller
+      - run: cd bootloader && python3 waf --universal2 all
+      - uses: actions/upload-artifact@v2
+        with:
+          name: PyInstaller
+          path: PyInstaller/bootloa?er/Darwin*
