@@ -1,0 +1,11 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: '/tests'
+    schedule:
+      interval: weekly
+
+    ignore:
+      # Packages whose latest versions are known to break under PyInstaller
+      # should be listed here.
+      - dependency-name: django

@@ -21,7 +21,7 @@ installed:
 
 The easiest way to install these (and some useful pytest add-ons) is running
 ```
-pip install -U -r tests/requirements-tools.txt
+pip install -U -r test-requirements.txt
 ```
 
 Running the Tests
@@ -76,9 +76,9 @@ officially supported by PyInstaller.
 ### Python Packages
 
 Regardless of platform or CI service, all Python packages to be tested should
-be listed in `test/requirements-library.txt`. Python packages required for
+be listed in `test/requirements.txt`. Python packages required for
 exercising tests (e.g., `pytest`) should instead be listed in
-`test/requirements-tools.txt`.
+`test-requirements.txt`.
 
 Both files are usual pip [requirements
 files](https://pip.pypa.io/en/stable/reference/pip_install/#requirements-file-format)

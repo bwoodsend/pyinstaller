@@ -13,7 +13,7 @@ Quickstart
 
 * Install required testing tools::
 
-    pip install -r tests/requirements-tools.txt
+    pip install -r test-requirements.txt
 
 * Commit as often as you’d like, but squash or otherwise
   rewrite your commits into logical patches before asking

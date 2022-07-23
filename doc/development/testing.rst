@@ -25,7 +25,7 @@ To run the test-suite, please proceed as follows.
      pip install --user virtualenv
      virtualenv /tmp/venv
      . /tmp/venv/bin/activate
-     pip install -r tests/requirements-tools.txt
+     pip install -r test-requirements.txt
 
 3. To run a single test use e.g.::
 
@@ -38,10 +38,12 @@ To run the test-suite, please proceed as follows.
    This only runs the tests for the core functionality and some packages from
    the Python standard library.
 
-5. To get better coverage, including many of the available hooks, you need to
-   download the Python packages to be tested. For this please run::
+5. To test the hooks for 3rd party libraries that PyInstaller contains, those
+   libraries must also be installed. Generally, it's only necessary to install
+   the library whose hook you are currently writing/fixing. Should you want to
+   test them all then run::
 
-     pip install -U -r tests/requirements-libraries.txt
+     pip install -U -r tests/libraries-requirements.txt
      pytest tests/unit tests/functional
 
 .. note:
