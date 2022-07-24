@@ -1,0 +1,13 @@
+name: Update dependencies
+
+on:
+  schedule:
+    - cron: '12 3 * * sat'
+  workflow_dispatch:
+
+jobs:
+  main:
+    runs-on: ubuntu-latest
+    steps:
+      - run: pip install pyupio
+      - run: pyup --user-token=${{ secrets.GITHUB_TOKEN }} --repo=${{ github.repository }} --provider_url=https://api.github.com --initial
