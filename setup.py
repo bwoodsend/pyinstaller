@@ -210,6 +210,19 @@ class bdist_macos(wheel_commands["wheel_darwin_64bit"]):
         self.PLAT_NAME = f"macosx_{version}_{architectures}"
         super().finalize_options()
 
+class collect_all_wheel(bdist_wheel):
+    def finalize_options(self):
+        self.distribution.package_data = {
+            "PyInstaller": [
+                f"bootloader/*/*",
+                # These files need to be explicitly included as well.
+                "fake-modules/*.py",
+                "hooks/rthooks.dat",
+                "lib/README.rst",
+            ],
+        }
+        super().finalize_options()
+
 
 wheel_commands["wheel_darwin_64bit"] = bdist_macos
 
@@ -279,6 +292,7 @@ setup(
     cmdclass={
         'build_bootloader': build_bootloader,
         'build': MyBuild,
+        'bdist_wheel': collect_all_wheel,
         **wheel_commands,
         'bdist_wheels': bdist_wheels,
         **bdist_egg_override,
