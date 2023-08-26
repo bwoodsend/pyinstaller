@@ -10,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         with:
-          ref: develop
+          ref: ${{ inputs.branch }}
           repository: pyinstaller/pyinstaller
       - run: cd bootloader && python waf all
       - run: cd bootloader && python waf --target-arch=32bit all
@@ -25,7 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         with:
-          ref: develop
+          ref: ${{ inputs.branch }}
           repository: pyinstaller/pyinstaller
       - run: cd bootloader && python3 waf --universal2 all
       - uses: actions/upload-artifact@v2
