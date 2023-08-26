@@ -1,6 +1,8 @@
 on:
   workflow_dispatch:
-  push:
+    inputs:
+      branch:
+        default: develop
 
 jobs:
   windows:
