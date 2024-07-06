@@ -8,27 +8,27 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           ref: ${{ inputs.branch }}
           repository: pyinstaller/pyinstaller
       - run: cd bootloader && python waf all
       - run: cd bootloader && python waf --target-arch=32bit all
       - run: cd bootloader && python waf --target-arch=64bit-arm all
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v3
         with:
           name: PyInstaller
           path: PyInstaller/bootloa?er/Windows*
 
   macOS:
-    runs-on: macos-11.0
+    runs-on: macos-12.0
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           ref: ${{ inputs.branch }}
           repository: pyinstaller/pyinstaller
       - run: cd bootloader && python3 waf --universal2 all
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v3
         with:
           name: PyInstaller
           path: PyInstaller/bootloa?er/Darwin*
