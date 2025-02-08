@@ -15,7 +15,7 @@ jobs:
       - run: cd bootloader && python waf all
       - run: cd bootloader && python waf --target-arch=32bit all
       - run: cd bootloader && python waf --target-arch=64bit-arm all
-      - uses: actions/upload-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
           name: windows
           path: PyInstaller/bootloa?er/Windows*
